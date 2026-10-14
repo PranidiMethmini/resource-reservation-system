@@ -86,7 +86,7 @@ export default function BookingForm({ resources, initialResourceId, today }: { r
   }
 
   if (confirmation) return (
-    <div ref={confirmationRef} tabIndex={-1} className="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-7 text-center shadow-sm outline-none sm:p-10">
+    <div ref={confirmationRef} tabIndex={-1} className="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm outline-none sm:p-9">
       <span className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600"><CalendarIcon success /></span>
       <p role="status" className="text-xs font-semibold uppercase tracking-widest text-emerald-700">Reservation confirmed</p>
       <h2 className="mt-3 text-2xl font-bold tracking-tight">You’re all booked!</h2>
@@ -109,11 +109,11 @@ export default function BookingForm({ resources, initialResourceId, today }: { r
 
   return (
     <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(280px,1fr)]">
-      <section className="min-w-0 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm sm:p-8">
-        <div className="mb-6 flex items-center gap-3"><span className="rounded-xl bg-indigo-50 p-3 text-indigo-600"><CalendarIcon /></span><div><h2 className="text-lg font-semibold">Plan your reservation</h2><p className="mt-1 text-xs text-slate-500">Choose a resource and the time you need.</p></div></div>
+      <section className="min-w-0 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-7">
+        <div className="mb-5 flex items-center gap-3"><span className="rounded-xl bg-indigo-50 p-3 text-indigo-600"><CalendarIcon /></span><div><h2 className="text-lg font-semibold">Plan your reservation</h2><p className="mt-1 text-xs text-slate-500">Choose a resource and the time you need.</p></div></div>
         {initialResourceId && !validInitial && <p role="status" className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">The linked resource is missing or inactive. Please choose an active resource below.</p>}
         <form onSubmit={handleSubmit} noValidate aria-busy={submitting}>
-          <fieldset disabled={submitting || loginRequired} className="min-w-0 space-y-6">
+          <fieldset disabled={submitting || loginRequired} className="min-w-0 space-y-5">
             <legend className="sr-only">Reservation details</legend>
             <div><label htmlFor="resource" className="text-sm font-semibold text-slate-700">Resource</label><select ref={resourceRef} id="resource" name="resource" required value={selected ? resourceId : ""} onChange={(event) => { setResourceId(event.target.value); clearError(); }} aria-invalid={fieldError === "resource"} aria-describedby={fieldError === "resource" ? "booking-error" : undefined} className={input}><option value="">Choose an active resource</option>{resources.filter((item) => item.isActive).map((item) => <option key={item.id} value={item.id}>{item.name} — {item.type}</option>)}</select></div>
             {selected && <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4"><p className="text-sm font-semibold text-indigo-900">{selected.type}</p><p className="mt-1 break-words text-sm text-slate-600">{selected.location} · Capacity: {selected.capacity}</p><p className="mt-2 text-xs text-slate-500">Active resource · Time-slot availability checked on submission</p></div>}
@@ -128,17 +128,17 @@ export default function BookingForm({ resources, initialResourceId, today }: { r
       </section>
 
       <aside aria-label="Live booking summary" className="min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
-        <div className="bg-gradient-to-br from-slate-950 via-indigo-950 to-indigo-800 p-6 text-white"><p className="text-xs font-semibold tracking-widest text-indigo-300">YOUR NEXT PLAN</p><h2 className="mt-2 text-xl font-semibold">Booking summary</h2><p className="mt-2 text-xs leading-5 text-slate-300">Review your details before reserving.</p></div>
-        <div className="p-6">{selected && <><h3 className="break-words text-lg font-semibold text-slate-900">{selected.name}</h3><p className="mt-1 text-sm text-slate-500">{selected.type}</p></>}
-          <dl className="mt-6 space-y-4 text-sm">{[
+        <div className="bg-gradient-to-br from-slate-950 via-indigo-950 to-indigo-800 p-5 text-white"><p className="text-xs font-semibold tracking-widest text-indigo-300">YOUR NEXT PLAN</p><h2 className="mt-2 text-xl font-semibold">Booking summary</h2><p className="mt-2 text-xs leading-5 text-slate-300">Review your details before reserving.</p></div>
+        <div className="p-5">{selected && <><h3 className="break-words text-lg font-semibold text-slate-900">{selected.name}</h3><p className="mt-1 text-sm text-slate-500">{selected.type}</p></>}
+          <dl className="mt-5 space-y-3.5 text-sm">{[
             ["Date", start ? formatBookingDate(start) : parseBookingTime(date, "12:00") ? formatBookingDate(parseBookingTime(date, "12:00")!) : null],
             ["Start", start ? formatBookingTime(start) : null],
             ["End", end ? formatBookingTime(end) : null],
             ["Duration", duration ? formatDuration(duration) : null],
             ["Location", selected?.location || null],
             ["Capacity", selected ? String(selected.capacity) : null],
-          ].map(([label, value]) => <div key={label} className="flex items-start justify-between gap-4"><dt className="shrink-0 text-slate-500">{label}</dt><dd className="min-w-0 break-words text-right font-medium text-slate-800">{value ?? ""}</dd></div>)}</dl>
-          <Link href="/resources" className={`mt-4 inline-block rounded text-sm font-semibold text-indigo-600 hover:text-indigo-800 ${focus}`}>Explore other resources →</Link>
+          ].map(([label, value]) => <div key={label} className="flex items-start justify-between gap-4"><dt className="shrink-0 text-slate-500">{label}</dt><dd className="min-w-0 break-words text-right font-medium text-slate-800">{value ?? <span aria-hidden="true" className="block h-5 w-24 rounded border border-slate-300" />}</dd></div>)}</dl>
+          <Link href="/resources" className={`mt-4 inline-block rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-indigo-600 motion-safe:transition-colors hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-800 ${focus}`}>Explore other resources</Link>
         </div>
       </aside>
     </div>

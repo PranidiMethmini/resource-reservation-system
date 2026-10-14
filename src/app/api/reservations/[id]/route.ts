@@ -39,9 +39,9 @@ export async function PATCH(
     const { id } = await context.params;
 
     // 4. Validate the request
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
 
-    if (body?.status !== "CANCELLED") {
+    if (!body || typeof body !== "object" || Array.isArray(body) || body.status !== "CANCELLED") {
       return NextResponse.json(
         { error: "Invalid reservation status." },
         { status: 400 }

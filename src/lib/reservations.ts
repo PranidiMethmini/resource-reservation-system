@@ -20,11 +20,12 @@ export function canCancelReservation(reservation: Reservation, now: number): boo
 }
 
 export function organizeReservations(reservations: Reservation[], filter: ReservationFilter, search: string, now: number): Reservation[] {
-  const query = search.trim().toLowerCase();
+  const query = typeof search === "string" ? search.trim().toLowerCase() : "";
+  const safeFilter = ["all", "upcoming", "past", "cancelled"].includes(filter) ? filter : "all";
   const filtered = reservations.filter((reservation) => {
     const state = reservationState(reservation, now);
-    const matchesFilter = filter === "all" || (filter === "upcoming" && state === "Upcoming") || (filter === "past" && state === "Completed") || (filter === "cancelled" && state === "Cancelled");
-    return matchesFilter && (!query || [reservation.resource.name, reservation.resource.location].some((value) => value.toLowerCase().includes(query)));
+    const matchesFilter = safeFilter === "all" || (safeFilter === "upcoming" && state === "Upcoming") || (safeFilter === "past" && state === "Completed") || (safeFilter === "cancelled" && state === "Cancelled");
+    return matchesFilter && (!query || [reservation.resource.name, reservation.resource.location].some((value) => typeof value === "string" && value.toLowerCase().includes(query)));
   });
   const priority = { Ongoing: 0, Upcoming: 1, Completed: 2, Cancelled: 3 };
   return filtered.sort((a, b) => {

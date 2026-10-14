@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { z } from "zod";
+import { validateAuthFields } from "@/lib/auth-validation";
 
 const inputStyle = "block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none placeholder:text-slate-400 motion-safe:transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 disabled:bg-slate-50 disabled:text-slate-500 aria-invalid:border-red-500 aria-invalid:focus:ring-red-500/10";
 const linkStyle = "rounded font-semibold text-indigo-600 underline-offset-4 hover:text-indigo-800 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-indigo-600";
@@ -23,7 +23,7 @@ function PasswordField({ id, label, value, onChange, error, register = false }: 
           {visible ? "Hide" : "Show"}
         </button>
       </div>
-      {register && id === "password" && <p id="password-hint" className="mt-2 text-xs leading-5 text-slate-500">Use 8–128 characters. A longer, unique password is best.</p>}
+      {register && id === "password" && <p id="password-hint" className="mt-2 text-xs leading-5 text-slate-500">Use at least 8 characters, up to 72 UTF-8 bytes. A unique password is best.</p>}
       {error && <p id={`${id}-error`} className="mt-2 text-xs text-red-700">{error}</p>}
     </div>
   );
@@ -54,15 +54,9 @@ export default function AuthForm({ mode }: { mode: "login" | "register" }) {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending.current) return;
-    const nextErrors: Partial<Record<Field, string>> = {};
+    const nextErrors = validateAuthFields(mode, values);
     const email = values.email.trim();
     const name = values.name.trim();
-    if (registering && (name.length < 2 || name.length > 100)) nextErrors.name = "Enter your full name (2–100 characters).";
-    if (!z.email().safeParse(email).success) nextErrors.email = "Enter a valid email address.";
-    if (!values.password) nextErrors.password = "Enter your password.";
-    else if (registering && (values.password.length < 8 || values.password.length > 128)) nextErrors.password = "Your password must contain 8–128 characters.";
-    if (registering && !values.confirmPassword) nextErrors.confirmPassword = "Confirm your password.";
-    else if (registering && values.password !== values.confirmPassword) nextErrors.confirmPassword = "Your passwords do not match.";
     setErrors(nextErrors);
     setError("");
     const firstError = Object.keys(nextErrors)[0];
@@ -83,6 +77,7 @@ export default function AuthForm({ mode }: { mode: "login" | "register" }) {
           body: JSON.stringify({ name, email, password: values.password }),
         });
         if (!response.ok) {
+          if (response.status === 409) setErrors({ email: "An account with this email already exists." });
           setError(response.status === 409
             ? "An account with this email already exists. Please sign in instead."
             : response.status === 400

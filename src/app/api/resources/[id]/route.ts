@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { lockResource, resourceTransactionOptions, isResourceTransactionBusy } from "@/lib/resource-lock";
 
 // Check whether the current user has admin permission
 async function checkAdminAccess() {
@@ -64,7 +65,10 @@ export async function PATCH(
 
     // 2. Get resource ID and request body
     const { id } = await context.params;
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid resource details" }, { status: 400 });
+    }
 
     const {
       name,
@@ -79,14 +83,18 @@ export async function PATCH(
     if (
       typeof name !== "string" ||
       !name.trim() ||
+      name.trim().length > 100 ||
       typeof type !== "string" ||
       !type.trim() ||
+      type.trim().length > 100 ||
       typeof location !== "string" ||
       !location.trim() ||
+      location.trim().length > 200 ||
       !Number.isInteger(capacity) ||
       capacity <= 0 ||
+      capacity > 2147483647 ||
       (description !== undefined &&
-        typeof description !== "string") ||
+        (typeof description !== "string" || description.trim().length > 2000)) ||
       typeof isActive !== "boolean"
     ) {
       return NextResponse.json(
@@ -95,33 +103,37 @@ export async function PATCH(
       );
     }
 
-    // 4. Check whether the resource exists
-    const existingResource = await prisma.resource.findUnique({
-      where: { id },
-    });
+    return await prisma.$transaction(async (tx) => {
+      // 4. Check whether the resource exists
+      const existingResource = await lockResource(tx, id);
 
-    if (!existingResource) {
-      return NextResponse.json(
-        { error: "Resource not found" },
-        { status: 404 }
-      );
+      if (!existingResource) {
+        return NextResponse.json(
+          { error: "Resource not found" },
+          { status: 404 }
+        );
+      }
+
+      // 5. Update the resource
+      const updatedResource = await tx.resource.update({
+        where: { id },
+        data: {
+          name: name.trim(),
+          description: description?.trim() || null,
+          type: type.trim(),
+          location: location.trim(),
+          capacity,
+          isActive,
+        },
+      });
+
+      return NextResponse.json(updatedResource);
+    }, resourceTransactionOptions);
+  } catch (error) {
+    if (isResourceTransactionBusy(error)) {
+      return NextResponse.json({ error: "This resource is busy. Please try again shortly." }, { status: 503, headers: { "Retry-After": "1" } });
     }
 
-    // 5. Update the resource
-    const updatedResource = await prisma.resource.update({
-      where: { id },
-      data: {
-        name: name.trim(),
-        description: description?.trim() || null,
-        type: type.trim(),
-        location: location.trim(),
-        capacity,
-        isActive,
-      },
-    });
-
-    return NextResponse.json(updatedResource);
-  } catch (error) {
     console.error("Error updating resource:", error);
 
     return NextResponse.json(
@@ -147,39 +159,43 @@ export async function DELETE(
     // 2. Get resource ID
     const { id } = await context.params;
 
-    // 3. Check whether the resource exists
-    const existingResource = await prisma.resource.findUnique({
-      where: { id },
-    });
+    return await prisma.$transaction(async (tx) => {
+      // 3. Check whether the resource exists
+      const existingResource = await lockResource(tx, id);
 
-    if (!existingResource) {
-      return NextResponse.json(
-        { error: "Resource not found" },
-        { status: 404 }
-      );
-    }
+      if (!existingResource) {
+        return NextResponse.json(
+          { error: "Resource not found" },
+          { status: 404 }
+        );
+      }
 
-    // 4. Prevent unnecessary updates
-    if (!existingResource.isActive) {
-      return NextResponse.json(
-        { error: "Resource is already deactivated." },
-        { status: 400 }
-      );
-    }
+      // 4. Prevent unnecessary updates
+      if (!existingResource.isActive) {
+        return NextResponse.json(
+          { error: "Resource is already deactivated." },
+          { status: 400 }
+        );
+      }
 
-    // 5. Soft delete: keep the resource in the database
-    const resource = await prisma.resource.update({
-      where: { id },
-      data: {
-        isActive: false,
-      },
-    });
+      // 5. Soft delete: keep the resource in the database
+      const resource = await tx.resource.update({
+        where: { id },
+        data: {
+          isActive: false,
+        },
+      });
 
-    return NextResponse.json({
-      message: "Resource deactivated successfully",
-      resource,
-    });
+      return NextResponse.json({
+        message: "Resource deactivated successfully",
+        resource,
+      });
+    }, resourceTransactionOptions);
   } catch (error) {
+    if (isResourceTransactionBusy(error)) {
+      return NextResponse.json({ error: "This resource is busy. Please try again shortly." }, { status: 503, headers: { "Retry-After": "1" } });
+    }
+
     console.error("Error deactivating resource:", error);
 
     return NextResponse.json(

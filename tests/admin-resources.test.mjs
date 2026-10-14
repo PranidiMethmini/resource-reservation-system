@@ -1,3 +1,4 @@
+import { resourceLockModule, withMockTransactions } from "./resource-lock-fixture.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -54,7 +55,9 @@ function endpoints({ authenticated = true, role = "ADMIN" } = {}) {
       update: async (args) => { writes.push(args); return { ...resource, ...args.data }; },
     },
   };
+  withMockTransactions(prisma);
   const imports = {
+    "@/lib/resource-lock": resourceLockModule,
     "next/server": { NextResponse: Response }, "@/lib/prisma": { prisma },
     "@/auth": { auth: async () => authenticated ? { user: { email: "admin@example.com" } } : null },
   };

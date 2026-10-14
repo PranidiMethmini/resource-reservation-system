@@ -63,21 +63,28 @@ export async function POST(request: Request) {
     }
 
     // 4. Validate the request body
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid resource details" }, { status: 400 });
+    }
 
     const { name, description, type, location, capacity } = body;
 
     if (
       typeof name !== "string" ||
       !name.trim() ||
+      name.trim().length > 100 ||
       typeof type !== "string" ||
       !type.trim() ||
+      type.trim().length > 100 ||
       typeof location !== "string" ||
       !location.trim() ||
+      location.trim().length > 200 ||
       !Number.isInteger(capacity) ||
       capacity <= 0 ||
+      capacity > 2147483647 ||
       (description !== undefined &&
-        typeof description !== "string")
+        (typeof description !== "string" || description.trim().length > 2000))
     ) {
       return NextResponse.json(
         { error: "Invalid resource details" },

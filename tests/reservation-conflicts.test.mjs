@@ -1,8 +1,10 @@
+import { resourceLockModule, withMockTransactions } from "./resource-lock-fixture.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 import ts from "typescript";
+import { z } from "zod";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
@@ -25,10 +27,13 @@ function loadRoute({ error, overlap = null, active = true, session = true } = {}
       },
     },
   };
+  withMockTransactions(prisma);
   const exports = {};
   runInNewContext(compiled, {
     exports,
     require: (name) => {
+      if (name === "@/lib/resource-lock") return resourceLockModule;
+      if (name === "zod") return { z };
       if (name === "next/server") return { NextResponse: Response };
       if (name === "@/lib/prisma") return { prisma };
       if (name === "@/auth") return { auth: async () => session ? { user: { email: "user@example.com" } } : null };

@@ -25,13 +25,13 @@ function ResourceCard({ resource, isAdmin }: { resource: CatalogResource; isAdmi
   return (
     <article aria-labelledby={`resource-${resource.id}`} className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-indigo-100/80 bg-white shadow-sm motion-safe:transition hover:border-indigo-200 hover:shadow-md">
       <div aria-hidden="true" className={`h-1 ${resource.isActive ? "bg-gradient-to-r from-blue-500 to-indigo-500" : "bg-slate-300"}`} />
-      <div className="flex flex-1 flex-col p-5">
-        <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="flex flex-1 flex-col p-4.5">
+        <div className="mb-3 flex items-center justify-between gap-3">
           <span className={`inline-flex rounded-xl p-2.5 ${resource.isActive ? "bg-indigo-50 text-indigo-600" : "bg-slate-100 text-slate-500"}`}><Icon name="resource" className="h-5 w-5" /></span>
           <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${resource.isActive ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}><span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${resource.isActive ? "bg-emerald-500" : "bg-slate-400"}`} />{resource.isActive ? "Active" : "Inactive"}</span>
         </div>
-        <p className="mb-2 break-words text-xs font-semibold uppercase tracking-wide text-indigo-600">{resource.type}</p>
         <h2 id={`resource-${resource.id}`} className="break-words text-xl font-semibold tracking-tight text-slate-900">{resource.name}</h2>
+        <p className="mt-1.5 break-words text-xs font-semibold uppercase tracking-wide text-indigo-600">{resource.type}</p>
         {resource.description && (
           <div className="mt-3">
             <p id={`description-${resource.id}`} className={`break-words text-sm leading-6 text-slate-500 ${expanded ? "" : "line-clamp-3"}`}>{resource.description}</p>
@@ -42,8 +42,8 @@ function ResourceCard({ resource, isAdmin }: { resource: CatalogResource; isAdmi
           <div className="flex items-start gap-2.5"><dt className="shrink-0 text-slate-400"><Icon name="location" className="h-4 w-4" /><span className="sr-only">Location</span></dt><dd className="min-w-0 break-words text-slate-600">{resource.location}</dd></div>
           <div className="flex items-center gap-2.5"><dt className="shrink-0 text-slate-400"><Icon name="people" className="h-4 w-4" /><span className="sr-only">Capacity</span></dt><dd className="text-slate-600">Capacity: <span className="font-semibold text-slate-800">{resource.capacity}</span></dd></div>
         </dl>
-        <div className="mt-auto pt-4">
-          {resource.isActive ? <Link href={`/book?resourceId=${encodeURIComponent(resource.id)}`} aria-label={`Book Resource: ${resource.name}`} className={`flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white motion-safe:transition hover:bg-indigo-700 ${focus}`}>Book Resource<Icon name="arrow" className="h-4 w-4" /></Link> : <p className="rounded-xl bg-slate-100 px-4 py-2.5 text-center text-sm font-medium text-slate-500">Unavailable for booking</p>}
+        <div className="mt-auto pt-3.5">
+          {resource.isActive ? <Link href={`/book?resourceId=${encodeURIComponent(resource.id)}`} aria-label={`Book Resource: ${resource.name}`} className={`flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white motion-safe:transition hover:bg-indigo-700 ${focus}`}>Book Resource</Link> : <p className="rounded-xl bg-slate-100 px-4 py-2.5 text-center text-sm font-medium text-slate-500">Unavailable for booking</p>}
           {isAdmin && <Link href={`/admin/resources/${encodeURIComponent(resource.id)}/edit`} aria-label={`Edit Resource: ${resource.name}`} className={`mt-2 flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 motion-safe:transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 ${focus}`}><Icon name="edit" className="h-4 w-4" />Edit Resource</Link>}
         </div>
       </div>
@@ -60,7 +60,7 @@ export default function ResourceCatalog({ resources, isAdmin }: { resources: Cat
 
   return (
     <>
-      <section aria-label="Search and filter resources" className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+      <section aria-label="Search and filter resources" className="rounded-2xl border border-slate-200/80 bg-white p-4.5 shadow-sm sm:p-5">
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
           <div>
             <label htmlFor="resource-search" className="mb-2 block text-xs font-semibold text-slate-600">Search resources</label>
@@ -76,13 +76,13 @@ export default function ResourceCatalog({ resources, isAdmin }: { resources: Cat
       </section>
 
       {resources.length === 0 || filtered.length === 0 ? (
-        <section className="flex flex-col items-center rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
+        <section className="flex flex-col items-center rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-12 text-center">
           <span className="mb-5 rounded-2xl bg-indigo-50 p-5 text-indigo-500"><Icon name={resources.length === 0 ? "resource" : "search"} className="h-8 w-8" /></span>
           <h2 className="text-lg font-semibold">{resources.length === 0 ? "Your resource catalog starts here" : "No matching resources"}</h2>
           <p className="mt-2 max-w-sm text-sm leading-6 text-slate-500">{resources.length === 0 ? isAdmin ? "Add your first resource to make it bookable for your users." : "No resources have been added yet. Please check back soon." : "Try a different name or location, or clear your filters to explore the full catalog."}</p>
           {resources.length > 0 ? <button type="button" onClick={clearFilters} className={`mt-6 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white hover:bg-indigo-700 ${focus}`}>Clear Filters</button> : isAdmin && <Link href="/admin/resources/new" className={`mt-6 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white hover:bg-indigo-700 ${focus}`}>Add New Resource</Link>}
         </section>
-      ) : <section aria-label="Resource catalog" className="grid grid-cols-1 gap-5 lg:grid-cols-2 2xl:grid-cols-3">{filtered.map((resource) => <ResourceCard key={resource.id} resource={resource} isAdmin={isAdmin} />)}</section>}
+      ) : <section aria-label="Resource catalog" className="grid grid-cols-1 gap-6 lg:grid-cols-2 2xl:grid-cols-3">{filtered.map((resource) => <ResourceCard key={resource.id} resource={resource} isAdmin={isAdmin} />)}</section>}
     </>
   );
 }

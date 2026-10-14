@@ -6,18 +6,21 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "admin:setup": "node --experimental-strip-types scripts/setup-admin.mjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "bcryptjs": "^3.0.3",
+    "dotenv": "17.4.2",
     "next": "16.4.0",
     "next-auth": "^5.0.0-beta.32",
     "pg": "^8.23.1",
     "prisma": "^7.10.0",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",

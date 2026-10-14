@@ -2,6 +2,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { z } from "zod";
+import { lockResource, resourceTransactionOptions, isResourceTransactionBusy } from "@/lib/resource-lock";
 
 // PrismaPg can wrap PostgreSQL errors in cause or Prisma error metadata.
 function isReservationConflict(error: unknown): boolean {
@@ -100,12 +102,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid reservation details" }, { status: 400 });
+    }
 
     const { resourceId, startTime, endTime } = body;
 
     if (
       typeof resourceId !== "string" ||
+      !resourceId.trim() ||
+      resourceId.length > 200 ||
       typeof startTime !== "string" ||
       typeof endTime !== "string"
     ) {
@@ -119,6 +126,8 @@ export async function POST(request: Request) {
     const end = new Date(endTime);
 
     if (
+      !z.iso.datetime({ offset: true }).safeParse(startTime).success ||
+      !z.iso.datetime({ offset: true }).safeParse(endTime).success ||
       Number.isNaN(start.getTime()) ||
       Number.isNaN(end.getTime()) ||
       start >= end
@@ -136,62 +145,72 @@ export async function POST(request: Request) {
       );
     }
 
-    const resource = await prisma.resource.findUnique({
-      where: {
-        id: resourceId,
-      },
-    });
+    return await prisma.$transaction(async (tx) => {
+      const resource = await lockResource(tx, resourceId);
 
-    if (!resource || !resource.isActive) {
-      return NextResponse.json(
-        { error: "Resource is unavailable" },
-        { status: 404 }
-      );
-    }
+      if (!resource || !resource.isActive) {
+        return NextResponse.json(
+          { error: "Resource is unavailable" },
+          { status: 404 }
+        );
+      }
 
-    const overlappingReservation =
-      await prisma.reservation.findFirst({
-        where: {
+      if (start <= new Date()) {
+        return NextResponse.json({ error: "Reservations must be in the future" }, { status: 400 });
+      }
+
+      const overlappingReservation =
+        await tx.reservation.findFirst({
+          where: {
+            resourceId,
+            status: "CONFIRMED",
+            startTime: {
+              lt: end,
+            },
+            endTime: {
+              gt: start,
+            },
+          },
+        });
+
+      if (overlappingReservation) {
+        return NextResponse.json(
+          {
+            error:
+              "This resource is already booked for the selected time.",
+          },
+          { status: 409 }
+        );
+      }
+
+      if (start <= new Date()) {
+        return NextResponse.json({ error: "Reservations must be in the future" }, { status: 400 });
+      }
+
+      const reservation = await tx.reservation.create({
+        data: {
+          userId: user.id,
           resourceId,
+          startTime: start,
+          endTime: end,
           status: "CONFIRMED",
-          startTime: {
-            lt: end,
-          },
-          endTime: {
-            gt: start,
-          },
         },
       });
 
-    if (overlappingReservation) {
-      return NextResponse.json(
-        {
-          error:
-            "This resource is already booked for the selected time.",
-        },
-        { status: 409 }
-      );
-    }
-
-    const reservation = await prisma.reservation.create({
-      data: {
-        userId: user.id,
-        resourceId,
-        startTime: start,
-        endTime: end,
-        status: "CONFIRMED",
-      },
-    });
-
-    return NextResponse.json(reservation, {
-      status: 201,
-    });
+      return NextResponse.json(reservation, {
+        status: 201,
+      });
+    }, resourceTransactionOptions);
   } catch (error) {
     if (isReservationConflict(error)) {
       return NextResponse.json(
         { error: "This resource is already booked for the selected time." },
         { status: 409 }
       );
+    }
+
+    if (isResourceTransactionBusy(error)) {
+      return NextResponse.json({ error: "This resource is busy. Please try again shortly." }, { status: 503, headers: { "Retry-After": "1" } });
     }
 
     console.error("Error creating reservation:", error);

@@ -32,7 +32,7 @@ export default async function ResourcesPage() {
           <p className="mt-2 text-sm leading-6 text-slate-500">Find the right space or equipment for your next plan.</p>
         </div>
         {data?.isAdmin && <div className="flex flex-wrap items-center gap-3">
-          <Link href="/admin" className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:border-indigo-300 hover:text-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-indigo-500">Admin Panel</Link>
+
           <Link href="/admin/resources/new" className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-sm motion-safe:transition hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-indigo-500"><span aria-hidden="true" className="text-lg leading-none">+</span>Add New Resource</Link>
         </div>}
       </header>
