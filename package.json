@@ -2,9 +2,13 @@
   "name": "resource-reservation-system",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate --config prisma7.config.ts && next build",
+    "postinstall": "prisma generate --config prisma7.config.ts",
     "start": "next start",
     "lint": "eslint",
     "admin:setup": "node --experimental-strip-types scripts/setup-admin.mjs"
@@ -14,7 +18,7 @@
     "@prisma/client": "^7.10.0",
     "bcryptjs": "^3.0.3",
     "dotenv": "17.4.2",
-    "next": "16.4.0",
+    "next": "16.4.1",
     "next-auth": "^5.0.0-beta.32",
     "pg": "^8.23.1",
     "prisma": "^7.10.0",
@@ -30,7 +34,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.4.0",
+    "eslint-config-next": "16.4.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
