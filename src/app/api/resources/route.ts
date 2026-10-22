@@ -3,21 +3,32 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 
+const catalogHeaders = { "Cache-Control": "private, no-store" };
+
 export async function GET() {
   try {
+    const session = await auth();
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Please sign in to view resources." }, { status: 401, headers: catalogHeaders });
+    }
+    const user = await prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } });
+    if (!user) {
+      return NextResponse.json({ error: "User account not found." }, { status: 401, headers: catalogHeaders });
+    }
+
     const resources = await prisma.resource.findMany({
       orderBy: {
         createdAt: "desc",
       },
     });
 
-    return NextResponse.json(resources);
+    return NextResponse.json(resources, { headers: catalogHeaders });
   } catch (error) {
     console.error("Error fetching resources:", error);
 
     return NextResponse.json(
       { error: "Failed to fetch resources" },
-      { status: 500 }
+      { status: 500, headers: catalogHeaders }
     );
   }
 }

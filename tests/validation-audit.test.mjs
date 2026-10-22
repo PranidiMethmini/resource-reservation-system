@@ -29,12 +29,14 @@ test("login requires a valid email and password without checking account existen
 test("Credentials authorize normalizes email and returns identity only after successful bcrypt comparison", async () => {
   let config;
   const lookups = [];
+  const comparisons = [];
   const identity = { id: "admin-fixture", name: "Fixture Admin", email: "fixture@example.com", role: "ADMIN", passwordHash: "opaque-fixture-hash" };
   load("../src/auth.ts", {
-    "next-auth": { default: (options) => { config = options; return {}; } },
+    "next-auth": { default: (options) => { config = options; return {}; }, CredentialsSignin: class extends Error {} },
+    "@/lib/auth-rate-limit": { checkLoginLimit: async () => ({ allowed: true }) },
     "next-auth/providers/credentials": { default: (options) => options },
     "@/lib/prisma": { prisma: { user: { findUnique: async (args) => { lookups.push(args); return args.where.email === identity.email ? identity : null; } } } },
-    "bcryptjs": { default: { compare: async (candidate, stored) => candidate === validAuth.password && stored === identity.passwordHash } },
+    "bcryptjs": { default: { compare: async (candidate, stored) => { comparisons.push({ candidate, stored }); return candidate === validAuth.password && stored === identity.passwordHash; } } },
   });
   const authorize = config.providers[0].authorize;
   const result = await authorize({ email: " FIXTURE@EXAMPLE.COM ", password: validAuth.password });
@@ -43,6 +45,9 @@ test("Credentials authorize normalizes email and returns identity only after suc
   assert.equal(lookups[0].where.email, identity.email);
   assert.equal(await authorize({ email: identity.email, password: "wrong-fixture-password" }), null);
   assert.equal(await authorize({ email: "unknown@example.com", password: validAuth.password }), null);
+  assert.equal(comparisons.length, 3);
+  assert.equal(require("bcryptjs").getRounds(comparisons[2].stored), 12);
+  assert.notEqual(comparisons[2].stored, identity.passwordHash);
   const count = lookups.length;
   assert.equal(await authorize({ email: "bad", password: "" }), null);
   assert.equal(lookups.length, count);
@@ -76,7 +81,7 @@ function harness({ duplicate = false, race = false } = {}) {
   const prisma = {
     user: {
       findUnique: async (args) => args.select ? { id: "account", role: "ADMIN" } : duplicate ? { id: "existing" } : null,
-      create: async (args) => { if (race) throw Object.assign(new Error("Fixture unique conflict"), { code: "P2002" }); writes.push(args); return { id: "new-user", name: args.data.name, email: args.data.email, role: "USER" }; },
+      create: async (args) => { if (duplicate || race) throw Object.assign(new Error("Fixture unique conflict"), { code: "P2002" }); writes.push(args); return { id: "new-user", name: args.data.name, email: args.data.email, role: "USER" }; },
     },
     resource: {
       findUnique: async () => ({ id: "resource", isActive: true }),
@@ -92,6 +97,7 @@ function harness({ duplicate = false, race = false } = {}) {
   };
   withMockTransactions(prisma);
   const imports = {
+    "@/lib/auth-rate-limit": { checkRegistrationLimit: async () => ({ allowed: true }) },
     "@/lib/resource-lock": resourceLockModule,
     "@/auth": { auth: async () => ({ user: { email: "fixture@example.com" } }) }, "@/lib/prisma": { prisma },
     "next/server": { NextResponse: Response }, "bcryptjs": { default: { hash: async (_password, cost) => { assert.equal(cost, 12); return "opaque-fixture-hash"; } } },
@@ -115,10 +121,15 @@ test("all mutation APIs reject malformed JSON and non-object payloads with 400, 
   }
   assert.equal(api.writes.length, 0);
 });
-test("registration handles duplicate precheck and concurrent unique-email violation as 409", async () => {
+test("registration accepts duplicate and concurrent unique-email submissions without disclosure", async () => {
+  const accepted = await harness().registration(request("POST", validAuth));
+  const expected = await accepted.json();
   for (const options of [{ duplicate: true }, { race: true }]) {
     const api = harness(options);
-    assert.equal((await api.registration(request("POST", validAuth))).status, 409);
+    const response = await api.registration(request("POST", validAuth));
+    assert.equal(response.status, 201);
+    assert.deepEqual(await response.json(), expected);
+    assert.equal(response.headers.get("Cache-Control"), accepted.headers.get("Cache-Control"));
     assert.equal(api.writes.length, 0);
   }
 });
@@ -127,8 +138,9 @@ test("valid registration normalizes email/name, keeps USER role and excludes the
   const response = await api.registration(request("POST", { ...validAuth, name: " Fixture User ", email: " FIXTURE@EXAMPLE.COM ", role: "ADMIN" }));
   assert.equal(response.status, 201);
   const data = await response.json();
-  assert.equal(data.user.role, "USER"); assert.equal(data.user.email, "fixture@example.com"); assert.equal(data.user.name, "Fixture User");
-  assert.equal(data.user.passwordHash, undefined);
+  assert.equal(api.writes[0].data.role, "USER"); assert.equal(api.writes[0].data.email, "fixture@example.com"); assert.equal(api.writes[0].data.name, "Fixture User");
+  assert.equal(data.user, undefined);
+  assert.equal(JSON.stringify(data).includes("opaque-fixture-hash"), false);
 });
 test("registration server rejects missing fields, invalid email and out-of-policy passwords", async () => {
   const api = harness();

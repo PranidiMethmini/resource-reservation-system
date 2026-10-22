@@ -77,10 +77,11 @@ export default function AuthForm({ mode }: { mode: "login" | "register" }) {
           body: JSON.stringify({ name, email, password: values.password }),
         });
         if (!response.ok) {
-          if (response.status === 409) setErrors({ email: "An account with this email already exists." });
-          setError(response.status === 409
-            ? "An account with this email already exists. Please sign in instead."
-            : response.status === 400
+          if (response.status === 429 || response.status === 503) {
+            setError(response.status === 429 ? "Too many registration attempts. Please wait before trying again." : "Registration is temporarily unavailable. Please try again shortly.");
+            return;
+          }
+          setError(response.status === 400
               ? "Please check your details and try again."
               : "We couldn’t create your account right now. Please try again shortly.");
           return;
@@ -90,6 +91,10 @@ export default function AuthForm({ mode }: { mode: "login" | "register" }) {
         setSuccess(true);
       } else {
         const result = await signIn("credentials", { email, password: values.password, redirect: false });
+        if (result?.status === 429 || result?.status === 503) {
+          setError(result.status === 429 ? "Too many sign-in attempts. Please wait before trying again." : "Sign-in is temporarily unavailable. Please try again shortly.");
+          return;
+        }
         if (result?.error === "CredentialsSignin") {
           setError("The email or password is incorrect. Please try again.");
           return;
@@ -140,11 +145,11 @@ export default function AuthForm({ mode }: { mode: "login" | "register" }) {
 
           {Object.keys(errors).some((key) => errors[key as Field]) && <p role="alert" className="mt-4 text-sm text-red-700">Please check the highlighted fields.</p>}
           {error && <p role="alert" className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700">{error}</p>}
-          {success && <p role="status" className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-800">Your account is ready! Taking you to Sign In…</p>}
+          {success && <p role="status" className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-800">Registration processed. Taking you to Sign In…</p>}
 
           <button type="submit" disabled={loading} className="mt-6 flex w-full items-center justify-center gap-3 rounded-xl bg-indigo-600 px-4 py-3.5 text-sm font-semibold text-white shadow-sm shadow-indigo-600/20 motion-safe:transition hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-70">
             {loading && !success && <svg aria-hidden="true" className="h-4 w-4 motion-safe:animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" opacity="0.3" /><path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>}
-            {success ? "Account created" : loading ? registering ? "Creating your account…" : "Signing you in…" : registering ? "Create Account" : "Sign In"}
+            {success ? "Continue to Sign In" : loading ? registering ? "Creating your account…" : "Signing you in…" : registering ? "Create Account" : "Sign In"}
             {!loading && <span aria-hidden="true">→</span>}
           </button>
         </form>

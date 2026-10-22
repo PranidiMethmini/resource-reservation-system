@@ -24,6 +24,7 @@ Next.js 16 App Router, React 19, TypeScript, Tailwind CSS 4, PostgreSQL, Prisma 
 - npm and Git.
 - Local PostgreSQL; development uses PostgreSQL 18.
 - Database permissions to apply migrations and install `btree_gist`, or an administrator who can provision the extension.
+- Upstash Redis configuration for registration and new sign-ins; automated tests mock Redis and need no service credentials.
 - Internet access during installation and initial builds: `next/font/google` downloads Geist fonts during compilation.
 
 ## Getting started
@@ -75,12 +76,15 @@ Open [http://localhost:3000](http://localhost:3000), register at `/register`, th
 
 ## Environment variables
 
-Place both required variables in the root `.env`:
+Configure these server-only variables privately in local environment files or the matching Vercel environment. Never commit their values:
 
 | Variable | Purpose |
 | --- | --- |
 | `DATABASE_URL` | PostgreSQL URL used by PrismaPg, the Prisma CLI, and resource seed. URL-encode special characters in credentials. |
 | `AUTH_SECRET` | Strong random secret used by Auth.js to protect sessions. |
+| `UPSTASH_REDIS_REST_URL` | HTTPS REST endpoint for the authentication limiter's Upstash Redis database. |
+| `UPSTASH_REDIS_REST_TOKEN` | Redis REST access token. |
+| `RATE_LIMIT_KEY_SECRET` | Independent cryptographically random HMAC key, at least 32 characters; do not reuse the session secret. |
 
 Generate a fresh secret locally and paste it into your private `.env`:
 
@@ -91,6 +95,28 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'
 This intentionally displays the newly generated secret in your own terminal. Do not share or commit it, or use the example placeholder as a real secret.
 
 Next.js also reads `.env.local`, which can override `.env`. The Prisma configuration imports `dotenv/config`, and the seed explicitly reads `.env`. Keep setup values in `.env` and avoid conflicting overrides. No public client-side environment variables are required. Real environment files remain ignored; `.env.example` contains placeholders only.
+
+## Authentication rate limiting
+
+The Upstash SDKs use shared Redis counters and atomic server-side operations with weighted sliding windows. SDK clients are reused within each process; no in-memory counters authorize production requests. Starting limits count attempts before identity lookup, credential validation, or password hashing:
+
+| Scope | Limit |
+| --- | --- |
+| Credentials login per IP | 30 attempts per 10 minutes |
+| Credentials login per normalized email, across IPs | 10 attempts per 15 minutes |
+| Registration per IP | 5 attempts per hour |
+
+Create an Upstash Redis database through its dashboard when configuring the deployment, and set the three rate-limiter variables privately. This repository does not provision services. Without complete configuration, new login and registration attempts return a controlled unavailable response, including in local development. Existing sessions, session reads, and sign-out do not depend on Redis. Builds and automated tests require no Redis credentials or connection.
+
+On Vercel, client identity uses only the platform-managed `x-vercel-forwarded-for` metadata, gated on the platform environment marker. Invalid or missing metadata fails closed; arbitrary `x-forwarded-for` and `x-real-ip` values are ignored. Deploy directly behind Vercel ingress; adding another proxy requires a separate trust review. Standalone production servers are deliberately unsupported for new authentication attempts. Non-production loopback development uses one fixed loopback bucket, still backed by Redis, and never trusts incoming IP headers.
+
+Email addresses are trimmed/lowercased. Equivalent IP representations are canonicalized. Only HMAC identifiers enter Redis keys; raw emails, IPs, passwords, tokens, and provider error details are not logged by the limiter. Counters expire automatically; analytics, SDK telemetry, and local decision caching are disabled. Stable prefixes separate Vercel production, preview, and local environments. HMAC key rotation resets the identifier namespace, so coordinate rotations across instances.
+
+Redis transport has no automatic retries and a one-second request deadline; each limiter decision has a 1.5-second outer deadline. SDK timeout results, errors, quota failures, malformed results, and pending-operation failures all deny new authentication with 503 and a 60-second retry hint. Quota exhaustion can therefore interrupt new sign-ins: monitor provider usage before public exposure. Exceeded limits return 429 with a bounded `Retry-After` hint. Login preserves NextAuth 5.0.0-beta.32's JSON redirect envelope; native form requests retain Auth.js redirects and receive the retry header. Clients show a generic wait/unavailable message and do not automatically resubmit credentials. Authentication failures use generic responses. Valid new and duplicate registrations both return the same 201 message without a user payload; duplicate inserts never overwrite existing credentials or roles. Every valid registration submission performs cost-12 hashing, and missing-user login performs a cost-12 dummy comparison, reducing account-existence timing signals. Auth.js raw exception and cause logging is disabled.
+
+`GET /api/resources` requires a session belonging to a current database user and returns private, non-cacheable responses. Signed-in browsing continues to include both active and inactive resources.
+
+For offline development, run the mocked test suite; it exercises authentication without Redis or database credentials. For manual browser testing, use `npm run dev` with a separately approved non-production Redis database and independent private credentials/HMAC key. Standalone development always uses the local namespace, regardless of a stray Vercel environment label. Do not set the Vercel platform marker locally or forge platform IP headers. All local browsers share the loopback IP quota; wait for expiry or reset only dedicated development counters through the provider console. `npm run start` is production mode and deliberately rejects new sign-ins outside trusted Vercel ingress. A deployed Vercel instance must expose its production/preview/development environment metadata; missing metadata fails closed. No production bypass is provided.
 
 ## User roles and demo setup
 
@@ -138,11 +164,11 @@ Users and resources each have many reservations. Persisted statuses are `CONFIRM
 ```bash
 npx tsc --noEmit --incremental false
 npm run lint
-node --experimental-strip-types --test tests/admin-setup.test.mjs tests/admin-reservations.test.mjs tests/admin-resources.test.mjs tests/booking.test.mjs tests/reservation-conflicts.test.mjs tests/reservations.test.mjs tests/resource-catalog.test.mjs tests/resource-coordination.test.mjs tests/validation-audit.test.mjs
+node --experimental-strip-types --test tests/admin-setup.test.mjs tests/admin-reservations.test.mjs tests/admin-resources.test.mjs tests/auth-rate-limit.test.mjs tests/booking.test.mjs tests/reservation-conflicts.test.mjs tests/reservations.test.mjs tests/resource-catalog.test.mjs tests/resource-coordination.test.mjs tests/validation-audit.test.mjs
 npm run build
 ```
 
-There is no `npm test` script. The explicit command selects nine suites and excludes the support fixture. Tests cover validation, filters/sorting, timezone helpers, authorization/ownership, conflict handling, seed repeatability, and simulated booking/deactivation interleavings. Database interactions are mocked; tests do not prove real PostgreSQL concurrency or replace browser testing.
+There is no `npm test` script. The explicit command selects ten test files and excludes the support fixture. Tests cover authentication limits and failure handling, the installed Auth.js client, validation, filters/sorting, timezone helpers, authorization/ownership, conflict handling, seed repeatability, and simulated booking/deactivation interleavings. Redis and database interactions are mocked; tests do not prove live provider behavior or real PostgreSQL concurrency, and do not replace deployed browser testing.
 
 After a successful build, run local production mode:
 
